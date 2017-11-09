@@ -1,0 +1,69 @@
+{
+  "name": "storagedb",
+  "version": "0.0.1",
+  "description": "Zero dependency javascript Library for cross browser local storage, it supports LocalStorage, SessionStorage, and IndexedDB",
+  "repository": "git://github.com/tjbenton/storagedb",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tjbenton/storagedb"
+  },
+  "main": "dist/storagedb.js",
+  "esnext": "dist/storagedb.es.js",
+  "jsnext:main": "dist/storagedb.es.js",
+  "module": "dist/storagedb.es.js",
+  "browser": "dist/storagedb.min.js",
+  "author": {
+    "name": "Tyler Benton",
+    "email": "tjbenton21@gmail.com"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean; rollup --config",
+    "watch": "npm run clean; rollup --watch --config"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "babel-core": "~6.26.0",
+    "babel-plugin-transform-for-of-array": "~1.0.0",
+    "babel-preset-env": "~1.6.1",
+    "lint-rules": "github:ma-shop/lint-rules#v0.1.4",
+    "rollup": "~0.51.1",
+    "rollup-plugin-babel": "~3.0.2",
+    "rollup-plugin-uglify": "~2.0.1"
+  },
+  "eslintIgnore": [
+    "dist"
+  ],
+  "eslintConfig": {
+    "extends": [
+      "./node_modules/lint-rules/eslint/index.js"
+    ],
+    "env": {
+      "browser": false
+    },
+    "rules": {
+      "semi": [ "error", "never" ]
+    }
+  },
+  "babel": {
+    "presets": [
+      [
+        "env",
+        {
+          "targets": {
+            "node": "6.11"
+          }
+        }
+      ]
+    ]
+  },
+  "keywords": [
+    "index",
+    "local",
+    "database",
+    "storage",
+    "browser",
+    "indexed-db",
+    "indexedDB"
+  ]
+}
