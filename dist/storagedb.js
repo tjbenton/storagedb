@@ -1,6 +1,6 @@
 
 /*!
- * StorageDB JavaScript Library v0.0.1
+ * StorageDB JavaScript Library v0.0.3
  * https://github.com/tjbenton/storagedb
  */
   
@@ -217,6 +217,12 @@ var indexed = function (_ref) {
     };
   }
 
+  function objectStore() {
+    var transaction = db.transaction([name], 'readwrite');
+    transaction.onerror = logError;
+    return transaction.objectStore(name);
+  }
+
   function init(storage_set) {
     extend(result, storage_set);
     for (var _i = 0; _i < pending.length; _i++) {
@@ -273,10 +279,7 @@ var indexed = function (_ref) {
   var indexed_db_functions = {
     set: function set(value, callback) {
       try {
-        var transaction = db.transaction([name], 'readwrite');
-        var objectStore = transaction.objectStore(name);
-        var _request = objectStore.put(value);
-        transaction.onerror = logError;
+        var _request = objectStore().put(value);
         _request.onsuccess = function () {
           return call(callback, null, value);
         };
@@ -302,10 +305,7 @@ var indexed = function (_ref) {
     },
     get: function get(id, callback) {
       try {
-        var transaction = db.transaction([name], 'readwrite');
-        transaction.onerror = logError;
-        var objectStore = transaction.objectStore(name);
-        objectStore.get(id).onsuccess = function (event) {
+        objectStore().get(id).onsuccess = function (event) {
           call(callback, null, event.target.result);
         };
       } catch (err) {
@@ -315,18 +315,16 @@ var indexed = function (_ref) {
     },
     getAll: function getAll(callback) {
       try {
-        var transaction = db.transaction([name], 'readwrite');
-        transaction.onerror = logError;
-        var objectStore = transaction.objectStore(name);
+        var store = objectStore();
 
         // use getAll if avialable, else do it the old way
-        if (objectStore.getAll) {
-          objectStore.getAll().onsuccess = function (e) {
+        if (store.getAll) {
+          store.getAll().onsuccess = function (e) {
             call(callback, null, e.target.result);
           };
         } else {
           var objectArray = [];
-          objectStore.openCursor().onsuccess = function (event) {
+          store.openCursor().onsuccess = function (event) {
             var cursor = event.target.result;
             if (cursor) {
               objectArray.push(cursor.value);
@@ -345,9 +343,7 @@ var indexed = function (_ref) {
         debug('IndexedDB: missing objectStore ' + name);
         call(callback);
       } else {
-        var transaction = db.transaction([name], 'readwrite');
-        var objectStore = transaction.objectStore(name);
-        objectStore.delete(id).onsuccess = function () {
+        objectStore().delete(id).onsuccess = function () {
           return call(callback);
         };
       }

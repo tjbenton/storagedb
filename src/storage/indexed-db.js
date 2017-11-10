@@ -36,6 +36,12 @@ export default function({ name, id: key, debug }) {
     versionRequest.onerror = (e) => callback(e)
   }
 
+  function objectStore() {
+    const transaction = db.transaction([ name ], 'readwrite')
+    transaction.onerror = logError
+    return transaction.objectStore(name)
+  }
+
   function init(storage_set) {
     extend(result, storage_set)
     for (const item of pending) {
@@ -92,10 +98,7 @@ export default function({ name, id: key, debug }) {
   const indexed_db_functions = {
     set(value, callback) {
       try {
-        const transaction = db.transaction([ name ], 'readwrite')
-        const objectStore = transaction.objectStore(name)
-        const request = objectStore.put(value)
-        transaction.onerror = logError
+        const request = objectStore().put(value)
         request.onsuccess = () => call(callback, null, value)
         request.onerror = logError
       } catch (err) {
@@ -121,10 +124,7 @@ export default function({ name, id: key, debug }) {
 
     get(id, callback) {
       try {
-        const transaction = db.transaction([ name ], 'readwrite')
-        transaction.onerror = logError
-        const objectStore = transaction.objectStore(name)
-        objectStore.get(id).onsuccess = (event) => {
+        objectStore().get(id).onsuccess = (event) => {
           call(callback, null, event.target.result)
         }
       } catch (err) {
@@ -135,18 +135,16 @@ export default function({ name, id: key, debug }) {
 
     getAll(callback) {
       try {
-        const transaction = db.transaction([ name ], 'readwrite')
-        transaction.onerror = logError
-        const objectStore = transaction.objectStore(name)
+        const store = objectStore()
 
         // use getAll if avialable, else do it the old way
-        if (objectStore.getAll) {
-          objectStore.getAll().onsuccess = (e) => {
+        if (store.getAll) {
+          store.getAll().onsuccess = (e) => {
             call(callback, null, e.target.result)
           }
         } else {
           const objectArray = []
-          objectStore.openCursor().onsuccess = (event) => {
+          store.openCursor().onsuccess = (event) => {
             const cursor = event.target.result
             if (cursor) {
               objectArray.push(cursor.value)
@@ -166,9 +164,7 @@ export default function({ name, id: key, debug }) {
         debug(`IndexedDB: missing objectStore ${name}`)
         call(callback)
       } else {
-        const transaction = db.transaction([ name ], 'readwrite')
-        const objectStore = transaction.objectStore(name)
-        objectStore.delete(id).onsuccess = () => call(callback)
+        objectStore().delete(id).onsuccess = () => call(callback)
       }
     },
 
