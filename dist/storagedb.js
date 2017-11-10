@@ -1,6 +1,6 @@
 
 /*!
- * StorageDB JavaScript Library v0.0.3
+ * StorageDB JavaScript Library v0.0.4
  * https://github.com/tjbenton/storagedb
  */
   
