@@ -17,7 +17,7 @@ function sequencialCallbacks(values, callback, finalCallback) {
       if (index < values.length) {
         callback(values[index++]);
       } else {
-        finalCallback();
+        call(finalCallback, null, values);
       }
     }
   };
@@ -30,7 +30,7 @@ function multipleCallbacks(times, callback) {
     countDown: function countDown(value) {
       values.push(value);
       if (values.length === times) {
-        callback(values);
+        call(callback, null, values);
       }
     }
   };
@@ -105,6 +105,7 @@ var local = function (_ref, use_session) {
         if (stored[i][key] === value[key]) {
           updated = true;
           stored[i] = value;
+          break;
         }
       }
 
@@ -114,10 +115,9 @@ var local = function (_ref, use_session) {
 
       storage.setItem(name, JSON.stringify(stored));
 
-      call(callback);
+      call(callback, null, value);
     },
     setAll: function setAll(values, callback) {
-      // @todo update this to node style callback
       var responseCallback = multipleCallbacks(values.length, callback);
       for (var _i = 0; _i < values.length; _i++) {
         var value = values[_i];
@@ -199,6 +199,7 @@ var indexed = function (_ref) {
   }
 
   function createObjectStore(callback) {
+    debug('IndexedDB: going to create objectStore ' + name);
     db.close();
     var version = db.version + 1;
     var versionRequest = indexed_db.open(project, version);
@@ -206,8 +207,12 @@ var indexed = function (_ref) {
       db = versionRequest.result;
       db.createObjectStore(name, { keyPath: key });
     };
-    versionRequest.onsuccess = function (e) {
-      return callback(null, e);
+    versionRequest.onsuccess = function () {
+      debug('IndexedDB: created objectStore ' + name);
+      callback();
+    };
+    versionRequest.onerror = function (e) {
+      return callback(e);
     };
   }
 
@@ -219,6 +224,16 @@ var indexed = function (_ref) {
     }
   }
 
+  function switchToLocal(err) {
+    debug('An error ocurred: switching to localStorage', err);
+    debug('pending:', pending);
+    init(local);
+  }
+
+  function logError(err) {
+    debug('IndexedDB Error: ' + err.message + ' (Code ' + err.code + ')', err);
+  }
+
   var is_ie = /Trident\/|MSIE|Edge\//.test(window.navigator.userAgent);
   if (indexed_db && !is_ie) {
     // Now we can open our database
@@ -226,13 +241,19 @@ var indexed = function (_ref) {
 
     request.onsuccess = function () {
       db = request.result;
-      init(indexed_db_functions);
-      debug('pending:', pending);
+      if (!db.objectStoreNames.contains(name)) {
+        createObjectStore(function (err) {
+          if (err) return switchToLocal(err);
+          debug('pending:', pending);
+          init(indexed_db_functions);
+        });
+      } else {
+        debug('pending:', pending);
+        init(indexed_db_functions);
+      }
     };
-    request.onerror = function (event) {
-      debug('An error ocurred: switching to localStorage', event);
-      init(local);
-    };
+
+    request.onerror = switchToLocal;
   } else {
     return false;
   }
@@ -251,31 +272,18 @@ var indexed = function (_ref) {
   var indexed_db_functions = {
     set: function set(value, callback) {
       try {
-        if (!db.objectStoreNames.contains(name)) {
-          debug('IndexedDB: going to create objectStore ' + name);
-          createObjectStore(function () {
-            debug('IndexedDB: created objectStore ' + name);
-            indexed_db_functions.set(value, callback);
-          });
-          return;
-        }
-
         var transaction = db.transaction([name], 'readwrite');
         var objectStore = transaction.objectStore(name);
         var _request = objectStore.put(value);
-        transaction.onerror = function (error) {
-          debug('IndexedDB Error: ' + error.message + ' (Code ' + error.code + ')', error);
+        transaction.onerror = logError;
+        _request.onsuccess = function () {
+          return call(callback, null, value);
         };
-        _request.onsuccess = function (e) {
-          return call(callback, null, e);
-        };
-        _request.onerror = function (err) {
-          debug('IndexedDB Error: ' + err.message + ' (Code ' + err.code + ')', err);
-        };
+        _request.onerror = logError;
       } catch (err) {
         // err code 3 and 8 are not found on chrome and canary respectively
         if (err.code !== 3 && err.code !== 8) {
-          debug('IndexedDB Error: ' + err.message + ' (Code ' + err.code + ')', err);
+          logError(err);
           call(callback, err);
         } else {
           debug('IndexedDB: going to create objectStore ' + name);
@@ -293,36 +301,30 @@ var indexed = function (_ref) {
     },
     get: function get(id, callback) {
       try {
-        if (!db.objectStoreNames.contains(name)) {
-          debug('IndexedDB: missing objectStore ' + name);
-          call(callback);
-        } else {
-          var transaction = db.transaction([name], 'readwrite');
-          transaction.onerror = function (error) {
-            debug('IndexedDB Error: ' + error.message + ' (Code ' + error.code + ')', error);
-          };
-          var objectStore = transaction.objectStore(name);
-          objectStore.get(id).onsuccess = function (event) {
-            call(callback, null, event.target.result);
-          };
-        }
-      } catch (error) {
-        debug('IndexedDB Error: ' + error.message + ' (Code ' + error.code + ')', error);
-        call(callback, error);
+        var transaction = db.transaction([name], 'readwrite');
+        transaction.onerror = logError;
+        var objectStore = transaction.objectStore(name);
+        objectStore.get(id).onsuccess = function (event) {
+          call(callback, null, event.target.result);
+        };
+      } catch (err) {
+        logError(err);
+        call(callback, err);
       }
     },
     getAll: function getAll(callback) {
       try {
-        var objectArray = [];
-        if (!db.objectStoreNames.contains(name)) {
-          debug('IndexedDB: missing objectStore ' + name);
-          call(callback, null, objectArray);
-        } else {
-          var transaction = db.transaction([name], 'readwrite');
-          transaction.onerror = function (error) {
-            debug('IndexedDB Error: ' + error.message + ' (Code ' + error.code + ')', error);
+        var transaction = db.transaction([name], 'readwrite');
+        transaction.onerror = logError;
+        var objectStore = transaction.objectStore(name);
+
+        // use getAll if avialable, else do it the old way
+        if (objectStore.getAll) {
+          objectStore.getAll().onsuccess = function (e) {
+            call(callback, null, e.target.result);
           };
-          var objectStore = transaction.objectStore(name);
+        } else {
+          var objectArray = [];
           objectStore.openCursor().onsuccess = function (event) {
             var cursor = event.target.result;
             if (cursor) {
@@ -359,10 +361,10 @@ var indexed = function (_ref) {
           if (db.objectStoreNames.contains(name)) {
             db.deleteObjectStore(name);
           }
-        } catch (error) {
-          // error code 3 and 8 are not found on chrome and canary respectively
-          if (error.code !== 3 && error.code !== 8) {
-            debug('IndexedDB Error: ' + error.message + ' (Code ' + error.code + ')', error);
+        } catch (err) {
+          // err code 3 and 8 are not found on chrome and canary respectively
+          if (err.code !== 3 && err.code !== 8) {
+            logError(err);
           }
         }
       };

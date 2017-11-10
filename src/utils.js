@@ -6,7 +6,7 @@ export function sequencialCallbacks(values, callback, finalCallback) {
       if (index < values.length) {
         callback(values[index++])
       } else {
-        finalCallback()
+        call(finalCallback, null, values)
       }
     },
   }
@@ -19,7 +19,7 @@ export function multipleCallbacks(times, callback) {
     countDown(value) {
       values.push(value)
       if (values.length === times) {
-        callback(values)
+        call(callback, null, values)
       }
     },
   }

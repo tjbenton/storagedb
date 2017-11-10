@@ -21,6 +21,7 @@ export default function({ name, id: key, debug }) {
   }
 
   function createObjectStore(callback) {
+    debug(`IndexedDB: going to create objectStore ${name}`)
     db.close()
     const version = db.version + 1
     const versionRequest = indexed_db.open(project, version)
@@ -28,7 +29,11 @@ export default function({ name, id: key, debug }) {
       db = versionRequest.result
       db.createObjectStore(name, { keyPath: key })
     }
-    versionRequest.onsuccess = (e) => callback(null, e)
+    versionRequest.onsuccess = () => {
+      debug(`IndexedDB: created objectStore ${name}`)
+      callback()
+    }
+    versionRequest.onerror = (e) => callback(e)
   }
 
   function init(storage_set) {
@@ -38,6 +43,16 @@ export default function({ name, id: key, debug }) {
     }
   }
 
+  function switchToLocal(err) {
+    debug('An error ocurred: switching to localStorage', err)
+    debug('pending:', pending)
+    init(local)
+  }
+
+  function logError(err) {
+    debug(`IndexedDB Error: ${err.message} (Code ${err.code})`, err)
+  }
+
   const is_ie = /Trident\/|MSIE|Edge\//.test(window.navigator.userAgent)
   if (indexed_db && !is_ie) {
     // Now we can open our database
@@ -45,13 +60,19 @@ export default function({ name, id: key, debug }) {
 
     request.onsuccess = () => {
       db = request.result
-      init(indexed_db_functions)
-      debug('pending:', pending)
+      if (!db.objectStoreNames.contains(name)) {
+        createObjectStore((err) => {
+          if (err) return switchToLocal(err)
+          debug('pending:', pending)
+          init(indexed_db_functions)
+        })
+      } else {
+        debug('pending:', pending)
+        init(indexed_db_functions)
+      }
     }
-    request.onerror = (event) => {
-      debug('An error ocurred: switching to localStorage', event)
-      init(local)
-    }
+
+    request.onerror = switchToLocal
   } else {
     return false
   }
@@ -71,29 +92,16 @@ export default function({ name, id: key, debug }) {
   const indexed_db_functions = {
     set(value, callback) {
       try {
-        if (!db.objectStoreNames.contains(name)) {
-          debug(`IndexedDB: going to create objectStore ${name}`)
-          createObjectStore(() => {
-            debug(`IndexedDB: created objectStore ${name}`)
-            indexed_db_functions.set(value, callback)
-          })
-          return
-        }
-
         const transaction = db.transaction([ name ], 'readwrite')
         const objectStore = transaction.objectStore(name)
         const request = objectStore.put(value)
-        transaction.onerror = (error) => {
-          debug(`IndexedDB Error: ${error.message} (Code ${error.code})`, error)
-        }
-        request.onsuccess = (e) => call(callback, null, e)
-        request.onerror = (err) => {
-          debug(`IndexedDB Error: ${err.message} (Code ${err.code})`, err)
-        }
+        transaction.onerror = logError
+        request.onsuccess = () => call(callback, null, value)
+        request.onerror = logError
       } catch (err) {
         // err code 3 and 8 are not found on chrome and canary respectively
         if (err.code !== 3 && err.code !== 8) {
-          debug(`IndexedDB Error: ${err.message} (Code ${err.code})`, err)
+          logError(err)
           call(callback, err)
         } else {
           debug(`IndexedDB: going to create objectStore ${name}`)
@@ -113,37 +121,31 @@ export default function({ name, id: key, debug }) {
 
     get(id, callback) {
       try {
-        if (!db.objectStoreNames.contains(name)) {
-          debug(`IndexedDB: missing objectStore ${name}`)
-          call(callback)
-        } else {
-          const transaction = db.transaction([ name ], 'readwrite')
-          transaction.onerror = (error) => {
-            debug(`IndexedDB Error: ${error.message} (Code ${error.code})`, error)
-          }
-          const objectStore = transaction.objectStore(name)
-          objectStore.get(id).onsuccess = (event) => {
-            call(callback, null, event.target.result)
-          }
+        const transaction = db.transaction([ name ], 'readwrite')
+        transaction.onerror = logError
+        const objectStore = transaction.objectStore(name)
+        objectStore.get(id).onsuccess = (event) => {
+          call(callback, null, event.target.result)
         }
-      } catch (error) {
-        debug(`IndexedDB Error: ${error.message} (Code ${error.code})`, error)
-        call(callback, error)
+      } catch (err) {
+        logError(err)
+        call(callback, err)
       }
     },
 
     getAll(callback) {
       try {
-        const objectArray = []
-        if (!db.objectStoreNames.contains(name)) {
-          debug(`IndexedDB: missing objectStore ${name}`)
-          call(callback, null, objectArray)
-        } else {
-          const transaction = db.transaction([ name ], 'readwrite')
-          transaction.onerror = (error) => {
-            debug(`IndexedDB Error: ${error.message} (Code ${error.code})`, error)
+        const transaction = db.transaction([ name ], 'readwrite')
+        transaction.onerror = logError
+        const objectStore = transaction.objectStore(name)
+
+        // use getAll if avialable, else do it the old way
+        if (objectStore.getAll) {
+          objectStore.getAll().onsuccess = (e) => {
+            call(callback, null, e.target.result)
           }
-          const objectStore = transaction.objectStore(name)
+        } else {
+          const objectArray = []
           objectStore.openCursor().onsuccess = (event) => {
             const cursor = event.target.result
             if (cursor) {
@@ -180,10 +182,10 @@ export default function({ name, id: key, debug }) {
           if (db.objectStoreNames.contains(name)) {
             db.deleteObjectStore(name)
           }
-        } catch (error) {
-          // error code 3 and 8 are not found on chrome and canary respectively
-          if (error.code !== 3 && error.code !== 8) {
-            debug(`IndexedDB Error: ${error.message} (Code ${error.code})`, error)
+        } catch (err) {
+          // err code 3 and 8 are not found on chrome and canary respectively
+          if (err.code !== 3 && err.code !== 8) {
+            logError(err)
           }
         }
       }

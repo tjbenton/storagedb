@@ -26,6 +26,7 @@ export default function({ name, id: key }, use_session) {
         if (stored[i][key] === value[key]) {
           updated = true
           stored[i] = value
+          break
         }
       }
 
@@ -35,10 +36,9 @@ export default function({ name, id: key }, use_session) {
 
       storage.setItem(name, JSON.stringify(stored))
 
-      call(callback)
+      call(callback, null, value)
     },
     setAll(values, callback) {
-      // @todo update this to node style callback
       const responseCallback = multipleCallbacks(values.length, callback)
       for (const value of values) {
         this.set(value, responseCallback.countDown)
