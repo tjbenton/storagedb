@@ -164,29 +164,22 @@ export default function({ name, id: key, debug }) {
         debug(`IndexedDB: missing objectStore ${name}`)
         call(callback)
       } else {
-        objectStore().delete(id).onsuccess = () => call(callback)
+        const remove = objectStore().delete(id)
+        remove.onerror = remove.onsuccess = () => call(callback)
       }
     },
 
     removeAll(callback) {
-      indexed_db_functions.close()
-      const version = db.version + 1
-      const request = indexed_db.open(project, version)
-      request.onupgradeneeded = () => {
-        try {
-          db = request.result
-          if (db.objectStoreNames.contains(name)) {
-            db.deleteObjectStore(name)
-          }
-        } catch (err) {
-          // err code 3 and 8 are not found on chrome and canary respectively
-          if (err.code !== 3 && err.code !== 8) {
-            logError(err)
-          }
+      try {
+        const clear = objectStore().clear()
+        clear.onerror = clear.onsuccess = () => {
+          call(callback)
         }
-      }
-      request.onsuccess = (e) => {
-        call(callback, null, e)
+      } catch (err) {
+        // err code 3 and 8 are not found on chrome and canary respectively
+        if (err.code !== 3 && err.code !== 8) {
+          logError(err)
+        }
       }
     },
 

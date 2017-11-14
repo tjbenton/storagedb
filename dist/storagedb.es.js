@@ -1,6 +1,6 @@
 
 /*!
- * StorageDB JavaScript Library v0.0.4
+ * StorageDB JavaScript Library v0.0.5
  * https://github.com/tjbenton/storagedb
  */
   
@@ -339,31 +339,24 @@ var indexed = function (_ref) {
         debug('IndexedDB: missing objectStore ' + name);
         call(callback);
       } else {
-        objectStore().delete(id).onsuccess = function () {
+        var remove = objectStore().delete(id);
+        remove.onerror = remove.onsuccess = function () {
           return call(callback);
         };
       }
     },
     removeAll: function removeAll(callback) {
-      indexed_db_functions.close();
-      var version = db.version + 1;
-      var request = indexed_db.open(project, version);
-      request.onupgradeneeded = function () {
-        try {
-          db = request.result;
-          if (db.objectStoreNames.contains(name)) {
-            db.deleteObjectStore(name);
-          }
-        } catch (err) {
-          // err code 3 and 8 are not found on chrome and canary respectively
-          if (err.code !== 3 && err.code !== 8) {
-            logError(err);
-          }
+      try {
+        var clear = objectStore().clear();
+        clear.onerror = clear.onsuccess = function () {
+          call(callback);
+        };
+      } catch (err) {
+        // err code 3 and 8 are not found on chrome and canary respectively
+        if (err.code !== 3 && err.code !== 8) {
+          logError(err);
         }
-      };
-      request.onsuccess = function (e) {
-        call(callback, null, e);
-      };
+      }
     },
     close: function close() {
       db.close();

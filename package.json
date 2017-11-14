@@ -1,6 +1,6 @@
 {
   "name": "storagedb",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Zero dependency javascript Library for cross browser local storage, it supports LocalStorage, SessionStorage, and IndexedDB",
   "repository": "git://github.com/tjbenton/storagedb",
   "repository": {
